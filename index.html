@@ -369,6 +369,10 @@ footer { background: var(--ink); color: var(--on-dark-soft); border-top: 1px sol
           </div>
 
           <div class="step-pane active" data-step="1">
+            <div class="field">
+              <label for="whatsapp">Tu WhatsApp</label>
+              <input type="tel" id="whatsapp" name="whatsapp" autocomplete="tel" inputmode="tel" placeholder="Cód. de área + número, sin 0 ni 15">
+            </div>
             <div class="q-title">¿Qué tipo de negocio tenés?</div>
             <p class="q-sub">Elegí el que más se parezca al tuyo.</p>
             <div class="opts" role="radiogroup">
@@ -517,7 +521,6 @@ footer { background: var(--ink); color: var(--on-dark-soft); border-top: 1px sol
               <div class="demo-form" id="demoForm">
                 <div class="field"><label for="nombre">Tu nombre</label><input type="text" id="nombre" name="nombre" autocomplete="name" placeholder="Nombre y apellido"></div>
                 <div class="field"><label for="comercio">Nombre de tu comercio</label><input type="text" id="comercio" name="comercio" placeholder="Así lo configuramos en tu prueba"></div>
-                <div class="field"><label for="whatsapp">WhatsApp</label><input type="tel" id="whatsapp" name="whatsapp" autocomplete="tel" placeholder="Cód. de área + número"></div>
                 <div class="field"><label for="localidad">Localidad</label><input type="text" id="localidad" name="localidad" placeholder="Ciudad / provincia"></div>
                 <button type="button" class="btn btn-send" id="demoSend" disabled>Enviar mis datos al asesor →</button>
               </div>
@@ -729,6 +732,8 @@ footer { background: var(--ink); color: var(--on-dark-soft); border-top: 1px sol
   var current = 0;
   var total = panes.length;
   var quianswers = {};
+  var leadId = "";
+  var ORIGEN = (function () { try { var q = new URLSearchParams(location.search); return (q.get("origen") || q.get("utm_source") || "directo").slice(0, 40); } catch (e) { return "directo"; } })();
 
   function waLink(text) { return "https://wa.me/" + WHATSAPP_NUMERO + "?text=" + encodeURIComponent(text); }
   document.getElementById("waBottom").setAttribute("href", waLink("Hola! Vi la web de Impulso Digital y quiero coordinar una prueba para mi comercio."));
@@ -775,7 +780,7 @@ footer { background: var(--ink); color: var(--on-dark-soft); border-top: 1px sol
   form.addEventListener("input", validate);
 
   function stepValid(i) {
-    if (i === 0) return !!rubro();
+    if (i === 0) return !!rubro() && phoneValid();
     if (i === 1) return !!form.querySelector('input[name="metodo"]:checked');
     if (i === 2) {
       var a = !!form.querySelector('input[name="dolorA"]:checked');
@@ -793,8 +798,9 @@ footer { background: var(--ink); color: var(--on-dark-soft); border-top: 1px sol
     if (i === 5) return !!document.getElementById("factura").value;
     return true;
   }
+  function phoneValid() { return document.getElementById("whatsapp").value.replace(/\D/g, "").length >= 8; }
   function contactValid() {
-    return document.getElementById("nombre").value.trim() && document.getElementById("comercio").value.trim() && document.getElementById("whatsapp").value.trim();
+    return document.getElementById("nombre").value.trim() && document.getElementById("comercio").value.trim() && document.getElementById("localidad").value.trim();
   }
   function validate() {
     var btn = panes[current].querySelector("[data-next]"); if (btn) btn.disabled = !stepValid(current);
@@ -804,13 +810,18 @@ footer { background: var(--ink); color: var(--on-dark-soft); border-top: 1px sol
   form.addEventListener("click", function (e) {
     if (e.target.closest("[data-next]")) {
       if (!stepValid(current)) return;
-      if (current === 0) { buildDolor(); buildConsec(); }
+      if (current === 0) {
+        buildDolor(); buildConsec();
+        if (!leadId) leadId = genId();
+        var d0 = collect(); d0.lead_id = leadId; d0.estado = "Inició diagnóstico"; d0.fecha = new Date().toISOString();
+        saveLead(d0);
+      }
       if (current < total - 1) setStep(current + 1);
     }
     if (e.target.closest("[data-back]")) { if (current > 0) setStep(current - 1); }
   });
 
-  function collect() { var fd = new FormData(form), data = {}; fd.forEach(function (v, k) { data[k] = v; }); return data; }
+  function collect() { var fd = new FormData(form), data = {}; fd.forEach(function (v, k) { data[k] = v; }); data.origen = ORIGEN; return data; }
   function recommend(data) {
     var u = data.usuarios, r = data.rubro || "", distri = r.indexOf("Distribuidora") > -1, plan;
     if (u === "6+" || distri) plan = "Pro";
@@ -828,7 +839,8 @@ footer { background: var(--ink); color: var(--on-dark-soft); border-top: 1px sol
     quianswers = collect();
     var rec = recommend(quianswers), p = PLANES[rec.plan];
     quianswers.plan_recomendado = rec.plan;
-    quianswers.lead_id = genId();
+    if (!leadId) leadId = genId();
+    quianswers.lead_id = leadId;
     quianswers.estado = "Diagnóstico (sin pedir demo)";
     quianswers.fecha = new Date().toISOString();
     saveLead(quianswers);
